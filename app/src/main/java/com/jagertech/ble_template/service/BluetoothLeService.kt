@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothProfile.STATE_CONNECTED
 import android.bluetooth.BluetoothProfile.STATE_DISCONNECTED
 import android.content.Intent
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import java.util.*
@@ -21,11 +22,11 @@ class BluetoothLeService : Service() {
         const val ACTION_DATA_NOTIFY = "ACTION_DATA_NOTIFY"
         const val ACTION_DATA_WRITE = "ACTION_DATA_WRITE"
         const val EXTRA_DATA = "EXTRA_DATA"
+        const val EXTRA_UUID = "EXTRA_UUID"
     }
 
     private var TAG = "BluetoothLeService"
-    private var UUID_CHARACTERISTIC = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
-    private var UUID_DESCRIPTION = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+    private var UUID_NOTIFY_DESCRIPTION = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     private val binder = LocalBinder()
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var bluetoothGatt: BluetoothGatt? = null
@@ -99,40 +100,14 @@ class BluetoothLeService : Service() {
         // This is special handling for the Heart Rate Measurement profile. Data
         // parsing is carried out as per profile specifications.
         if (characteristic != null) {
-            when (characteristic.uuid) {
-                this.UUID_CHARACTERISTIC -> {
-//                    val flag = characteristic.properties
-//                    val format = when (flag and 0x01) {
-//                        0x01 -> {
-//                            Log.d(TAG, "Heart rate format UINT16.")
-//                            BluetoothGattCharacteristic.FORMAT_UINT16
-//                        }
-//                        else -> {
-//                            Log.d(TAG, "Heart rate format UINT8.")
-//                            BluetoothGattCharacteristic.FORMAT_UINT8
-//                        }
-//                    }
-//                    val heartRate = characteristic.getIntValue(format, 1)
-//                    Log.d(TAG, String.format("Received heart rate: %d", heartRate))
-//                    intent.putExtra(EXTRA_DATA, (heartRate).toString())
-                    val data: ByteArray? = characteristic.value
-                    if (data?.isNotEmpty() == true) {
-                        val hexString: String = data.joinToString(separator = " ") {
-                            String.format("%02X", it)
-                        }
-                        intent.putExtra(EXTRA_DATA, "$data\n$hexString")
-                    }
+            val data: ByteArray? = characteristic.value
+            if (data?.isNotEmpty() == true) {
+                val hexString: String = data.joinToString(separator = " ") {
+                    String.format("%02X", it)
                 }
-                else -> {
-                    // For all other profiles, writes the data formatted in HEX.
-                    val data: ByteArray? = characteristic.value
-                    if (data?.isNotEmpty() == true) {
-                        val hexString: String = data.joinToString(separator = " ") {
-                            String.format("%02X", it)
-                        }
-                        intent.putExtra(EXTRA_DATA, "$data\n$hexString")
-                    }
-                }
+                Log.d(TAG,hexString)
+                intent.putExtra(EXTRA_DATA, data)
+                intent.putExtra(EXTRA_UUID, characteristic.uuid.toString())
             }
         }
         sendBroadcast(intent)
@@ -144,14 +119,10 @@ class BluetoothLeService : Service() {
     ) {
         bluetoothGatt?.let { gatt ->
             gatt.setCharacteristicNotification(characteristic, enabled)
-
-            // This is specific to Heart Rate Measurement.
-            if (this.UUID_CHARACTERISTIC == characteristic.uuid) {
-                val descriptor =
-                    characteristic.getDescriptor(UUID_DESCRIPTION)
-                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                gatt.writeDescriptor(descriptor)
-            }
+            val descriptor =
+                characteristic.getDescriptor(UUID_NOTIFY_DESCRIPTION)
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            gatt.writeDescriptor(descriptor)
         } ?: run {
             Log.w(TAG, "BluetoothGatt not initialized")
         }
@@ -204,6 +175,22 @@ class BluetoothLeService : Service() {
         bluetoothGatt?.readCharacteristic(characteristic) ?: run {
             Log.w(TAG, "BluetoothGatt not initialized")
             return
+        }
+    }
+
+    fun writeCharacteristic(characteristic: BluetoothGattCharacteristic, byteValues: ByteArray) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            bluetoothGatt?.writeCharacteristic(characteristic, byteValues, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) ?: run {
+                Log.w(TAG, "BluetoothGatt not initialized")
+                return
+            }
+        }else{
+            characteristic.value = byteValues
+            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            bluetoothGatt?.writeCharacteristic(characteristic) ?: run {
+                Log.w(TAG, "BluetoothGatt not initialized")
+                return
+            }
         }
     }
 

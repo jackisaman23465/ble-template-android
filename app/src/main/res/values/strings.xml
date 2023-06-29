@@ -21,4 +21,12 @@
     <string name="menu_refresh">Refresh</string>
     <string name="menu_scan">Scan</string>
     <string name="menu_stop">Stop</string>
+    <string name="menu_clear">Clear</string>
+
+    <string name="led_control">Led Control</string>
+    <string name="led_state">Led State:</string>
+    <string name="led_on">On</string>
+    <string name="led_off">Off</string>
+    <string name="led_brightness">Led Brightness:</string>
+    <string name="led_mode">Led Mode:</string>
 </resources>
